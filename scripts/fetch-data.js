@@ -68,74 +68,31 @@ async function fetchTokenData() {
 
 async function fetchNewsData() {
     try {
-        // If you have a News API key, uncomment and use the following:
-        /*
-        const response = await axios.get(`${NEWS_API_BASE}/everything`, {
+        const response = await axios.get('https://newsdata.io/api/1/news', {
             params: {
-                q: 'cryptocurrency India blockchain',
+                apikey: process.env.NEWSDATA_API_KEY,
+                q: 'cryptocurrency OR blockchain india',
                 language: 'en',
-                sortBy: 'publishedAt',
-                apiKey: process.env.NEWS_API_KEY
+                category: 'business,technology'
             }
         });
 
-        const newsData = response.data.articles.slice(0, 6).map(article => ({
-            title: article.title,
-            summary: article.description,
-            timestamp: article.publishedAt,
-            source: article.source.name,
-            category: 'Cryptocurrency'
-        }));
-        */
+        if (response.data.status === 'success' && response.data.results) {
+            const newsData = response.data.results.slice(0, 6).map(article => ({
+                title: article.title,
+                summary: article.description || article.content,
+                timestamp: article.pubDate,
+                source: article.source_id,
+                category: article.category?.[0] || 'Cryptocurrency',
+                url: article.link || null,
+                image_url: article.image_url || null
+            }));
 
-        // Sample news data for demo
-        const newsData = [
-            {
-                title: "RBI Announces New Guidelines for Crypto Trading",
-                summary: "Reserve Bank of India releases comprehensive framework for cryptocurrency exchanges operating in India",
-                timestamp: new Date().toISOString(),
-                source: "Economic Times",
-                category: "Regulatory"
-            },
-            {
-                title: "Indian Crypto Exchanges See 400% Growth in 2024",
-                summary: "Domestic cryptocurrency exchanges report massive user growth despite regulatory challenges",
-                timestamp: new Date(Date.now() - 3600000).toISOString(),
-                source: "Business Standard",
-                category: "Market"
-            },
-            {
-                title: "Polygon Partners with Indian Tech Giants",
-                summary: "Blockchain platform Polygon announces strategic partnerships with major Indian IT companies",
-                timestamp: new Date(Date.now() - 7200000).toISOString(),
-                source: "Tech Crunch India",
-                category: "Technology"
-            },
-            {
-                title: "Crypto Tax Collection Surpasses Expectations",
-                summary: "Government reports higher than anticipated tax revenue from cryptocurrency transactions",
-                timestamp: new Date(Date.now() - 10800000).toISOString(),
-                source: "Financial Express",
-                category: "Taxation"
-            },
-            {
-                title: "WazirX Launches New Features for Indian Traders",
-                summary: "Popular Indian exchange introduces advanced trading tools and reduced fees for high-volume traders",
-                timestamp: new Date(Date.now() - 14400000).toISOString(),
-                source: "CryptoKhabar",
-                category: "Exchange"
-            },
-            {
-                title: "Blockchain Education Programs Launch in IITs",
-                summary: "Premier Indian institutes introduce specialized courses in blockchain technology and cryptocurrency",
-                timestamp: new Date(Date.now() - 18000000).toISOString(),
-                source: "Education Times",
-                category: "Education"
-            }
-        ];
-
-        fs.writeJsonSync(path.join(dataDir, 'news.json'), newsData, { spaces: 2 });
-        console.log('News data fetched successfully');
+            fs.writeJsonSync(path.join(dataDir, 'news.json'), newsData, { spaces: 2 });
+            console.log('News data fetched successfully from NewsData.io');
+        } else {
+            throw new Error('Invalid response from NewsData.io');
+        }
     } catch (error) {
         console.error('Error fetching news data:', error.message);
         createSampleNewsData();
@@ -144,41 +101,42 @@ async function fetchNewsData() {
 
 async function fetchComparisonData() {
     try {
-        // Fetch historical data for comparison from CoinGecko
-        const response = await axios.get(`${CRYPTO_API_BASE}/coins/bitcoin/market_chart`, {
-            ...axiosConfig,
-            params: {
-                vs_currency: 'inr',
-                days: 7
+        const tokens = [
+            { id: 'bitcoin', symbol: 'btc' },
+            { id: 'ethereum', symbol: 'eth' },
+            { id: 'binancecoin', symbol: 'bnb' },
+            { id: 'matic-network', symbol: 'matic' },
+            { id: 'wazirx', symbol: 'wrx' }
+        ];
+
+        const comparisonData = {};
+
+        // Fetch historical data for all tokens in parallel
+        await Promise.all(tokens.map(async (token) => {
+            try {
+                const response = await axios.get(`${CRYPTO_API_BASE}/coins/${token.id}/market_chart`, {
+                    ...axiosConfig,
+                    params: {
+                        vs_currency: 'inr',
+                        days: 7,
+                        interval: 'daily'
+                    }
+                });
+
+                comparisonData[token.symbol] = {
+                    prices: response.data.prices.map(item => ({
+                        timestamp: new Date(item[0]).toISOString(),
+                        price: item[1]
+                    }))
+                };
+            } catch (tokenError) {
+                console.error(`Error fetching data for ${token.id}:`, tokenError.message);
+                // Create sample data for this token if API fails
+                comparisonData[token.symbol] = createSampleTokenHistory(token.symbol);
             }
-        });
+        }));
 
-        const comparisonData = {
-            bitcoin: {
-                prices: response.data.prices.map(item => ({
-                    timestamp: item[0],
-                    price: item[1]
-                }))
-            }
-        };
-
-        // Add more tokens for comparison
-        const ethereumResponse = await axios.get(`${CRYPTO_API_BASE}/coins/ethereum/market_chart`, {
-            ...axiosConfig,
-            params: {
-                vs_currency: 'inr',
-                days: 7
-            }
-        });
-
-        comparisonData.ethereum = {
-            prices: ethereumResponse.data.prices.map(item => ({
-                timestamp: item[0],
-                price: item[1]
-            }))
-        };
-
-        // Add attribution to the data file
+        // Add attribution
         comparisonData.attribution = {
             source: "CoinGecko",
             url: "https://www.coingecko.com?utm_source=cryptokhabar&utm_medium=referral"
@@ -190,6 +148,27 @@ async function fetchComparisonData() {
         console.error('Error fetching comparison data:', error.message);
         createSampleComparisonData();
     }
+}
+
+// Helper function to create sample history for a token
+function createSampleTokenHistory(symbol) {
+    const now = Date.now();
+    const basePrice = {
+        'btc': 4500000,
+        'eth': 315000,
+        'bnb': 42000,
+        'matic': 100,
+        'wrx': 17
+    }[symbol] || 1000;
+
+    const variance = basePrice * 0.05; // 5% variance
+
+    return {
+        prices: Array.from({ length: 7 }, (_, i) => ({
+            timestamp: new Date(now - (6 - i) * 24 * 3600 * 1000).toISOString(),
+            price: basePrice + (Math.random() * 2 - 1) * variance
+        }))
+    };
 }
 
 function createSampleTokenData() {
@@ -247,21 +226,24 @@ function createSampleNewsData() {
             summary: "Reserve Bank of India expands central bank digital currency pilot to more cities",
             timestamp: new Date().toISOString(),
             source: "Economic Times",
-            category: "Regulatory"
+            category: "Regulatory",
+            url: "https://economictimes.indiatimes.com/markets/cryptocurrency"
         },
         {
             title: "Polygon Announces Major zkEVM Upgrade",
             summary: "Indian-origin blockchain company Polygon reveals significant improvements to its scaling solution",
             timestamp: new Date(Date.now() - 3600000).toISOString(),
             source: "CryptoKhabar",
-            category: "Technology"
+            category: "Technology",
+            url: "https://techcrunch.com/blockchain"
         },
         {
             title: "Indian Crypto Exchanges Report Record Trading Volumes",
             summary: "WazirX and CoinDCX see unprecedented daily trading volumes amid market recovery",
             timestamp: new Date(Date.now() - 7200000).toISOString(),
             source: "Business Standard",
-            category: "Market"
+            category: "Market",
+            url: "https://www.business-standard.com/markets/cryptocurrency"
         }
     ];
     
