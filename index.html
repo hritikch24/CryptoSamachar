@@ -490,12 +490,48 @@
             }
         }
 
-        // Update comparison chart and metrics
+        // Update comparison chart
         function updateComparison() {
             const token1 = document.getElementById('token1').value;
             const token2 = document.getElementById('token2').value;
 
+            if (!comparisonData || !comparisonData[token1.toLowerCase()] || !comparisonData[token2.toLowerCase()]) {
+                return;
+            }
+
+            const token1Prices = comparisonData[token1.toLowerCase()].prices;
+            const token2Prices = comparisonData[token2.toLowerCase()].prices;
+
+            // Update chart
+            if (window.tokenChart) {
+                const labels = token1Prices.map(p => new Date(p.timestamp).toLocaleDateString());
+                
+                window.tokenChart.data = {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: tokenData[token1].name,
+                            data: token1Prices.map(p => p.price),
+                            borderColor: '#FF6384',
+                            fill: false
+                        },
+                        {
+                            label: tokenData[token2].name,
+                            data: token2Prices.map(p => p.price),
+                            borderColor: '#36A2EB',
+                            fill: false
+                        }
+                    ]
+                };
+                window.tokenChart.update();
+            }
+
             // Update comparison metrics
+            updateComparisonMetrics(token1, token2);
+        }
+
+        // Update comparison metrics
+        function updateComparisonMetrics(token1, token2) {
             const metricsContainer = document.getElementById('comparisonMetrics');
             const token1Data = tokenData[token1];
             const token2Data = tokenData[token2];
@@ -505,14 +541,14 @@
                     <div class="bg-gray-50 p-4 rounded-lg">
                         <h4 class="font-bold mb-2">${token1Data.name}</h4>
                         <p>Price: ₹${token1Data.price_inr.toLocaleString('en-IN')}</p>
-                        <p>Market Cap: ₹${(token1Data.market_cap * 83).toLocaleString('en-IN')}</p>
-                        <p>24h Volume: ₹${(token1Data.volume_24h * 83).toLocaleString('en-IN')}</p>
+                        <p>Market Cap: ₹${(token1Data.market_cap).toLocaleString('en-IN')}</p>
+                        <p>24h Volume: ₹${(token1Data.volume_24h).toLocaleString('en-IN')}</p>
                     </div>
                     <div class="bg-gray-50 p-4 rounded-lg">
                         <h4 class="font-bold mb-2">${token2Data.name}</h4>
                         <p>Price: ₹${token2Data.price_inr.toLocaleString('en-IN')}</p>
-                        <p>Market Cap: ₹${(token2Data.market_cap * 83).toLocaleString('en-IN')}</p>
-                        <p>24h Volume: ₹${(token2Data.volume_24h * 83).toLocaleString('en-IN')}</p>
+                        <p>Market Cap: ₹${(token2Data.market_cap).toLocaleString('en-IN')}</p>
+                        <p>24h Volume: ₹${(token2Data.volume_24h).toLocaleString('en-IN')}</p>
                     </div>
                 `;
             }
